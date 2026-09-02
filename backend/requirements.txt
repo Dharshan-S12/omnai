@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+sqlalchemy[asyncio]
+asyncpg
+python-multipart
+python-dotenv
+alembic
+psycopg2-binary
+httpx
+chromadb
+sentence-transformers
+python-docx
+Pillow
+psutil

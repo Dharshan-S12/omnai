@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --mrpl-primary: #005a36;
+  --mrpl-primary-dark: #004328;
+  --mrpl-primary-light: #0d8a4f;
+  --mrpl-accent-gold: #c27803;
+  --mrpl-bg: #f8fafc;
+  --mrpl-surface: #ffffff;
+  --mrpl-border: #e2e8f0;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased min-h-screen font-sans;
+  background-color: #f8fafc;
+  color: #0f172a;
+  letter-spacing: -0.011em;
+}
+
+/* Subtle Industrial Dot Grid Pattern for Canvas */
+.industrial-grid {
+  background-size: 24px 24px;
+  background-image: 
+    radial-gradient(circle, #cbd5e1 1px, transparent 1px);
+}
+
+.industrial-grid-subtle {
+  background-size: 20px 20px;
+  background-image: 
+    radial-gradient(circle, #e2e8f0 1px, transparent 1px);
+}
+
+/* Enterprise Elevation Shadows */
+.shadow-premium {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+}
+
+.shadow-card {
+  box-shadow: 0 4px 6px -1px rgba(0, 90, 54, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.03), 0 0 0 1px rgba(226, 232, 240, 0.8);
+}
+
+.shadow-card-hover {
+  box-shadow: 0 10px 25px -5px rgba(0, 90, 54, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 104, 55, 0.2);
+}
+
+/* Custom smooth scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Selection highlight */
+::selection {
+  background-color: #bbf7d0;
+  color: #064e3b;
+}
+
+/* Animations */
+@keyframes subtlePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(0.96); }
+}
+
+.animate-subtle-pulse {
+  animation: subtlePulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
