@@ -50,7 +50,10 @@ $tests = @(
     "scripts/test_memory_evolution.py",
     "scripts/test_equipment_graph.py",
     "scripts/test_semantic_cache.py",
-    "scripts/test_cross_doc_count.py"
+    "scripts/test_cross_doc_count.py",
+
+    # Phase 3 — Exhaustive End-to-End Fixture Harness (All 20 Features)
+    "../tests/run_all_fixture_tests.py"
 )
 
 Set-Location $backendDir

@@ -1,0 +1,5 @@
+{
+  "equipment_id": "TRB-1105",
+  "vibration_rms": 4.4,
+  "temp": 79.5
+}

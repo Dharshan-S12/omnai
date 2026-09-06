@@ -51,8 +51,14 @@ def inspect_code_ast(code: str) -> Tuple[bool, Optional[str]]:
 
         # 3. Inspect dangerous builtin calls: `eval(...)`, `exec(...)`, `__import__(...)`
         elif isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name) and node.func.id in BLOCKED_BUILTINS:
-                return False, f"Security Violation: Invocation of dynamic execution builtin '{node.func.id}()' is blocked."
+            if isinstance(node.func, ast.Name):
+                if node.func.id in BLOCKED_BUILTINS:
+                    return False, f"Security Violation: Invocation of dynamic execution builtin '{node.func.id}()' is blocked."
+                if node.func.id == "open" and node.args:
+                    if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                        target_p = node.args[0].value
+                        if ".." in target_p or target_p.startswith(("/", "\\", "C:", "c:", "/etc", "\\Windows", "C:\\", "c:\\")):
+                            return False, "Security Violation: File path outside ephemeral tempdir is blocked."
 
             # Check for os.system or subprocess calls via attribute
             elif isinstance(node.func, ast.Attribute):

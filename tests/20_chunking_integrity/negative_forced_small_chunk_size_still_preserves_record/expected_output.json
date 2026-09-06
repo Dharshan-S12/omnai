@@ -1,0 +1,4 @@
+{
+  "record_split_across_chunks": false,
+  "even_under_small_chunk_config": true
+}

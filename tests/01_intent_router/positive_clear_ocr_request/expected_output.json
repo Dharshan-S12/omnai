@@ -1,0 +1,6 @@
+{
+  "routed_intent": "ocr",
+  "confidence": ">=0.65",
+  "is_disambiguation": false,
+  "target_model": "qwen2.5vl:7b"
+}

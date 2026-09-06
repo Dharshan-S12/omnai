@@ -1,0 +1,5 @@
+{
+  "equipment_id": "PMP-201",
+  "vibration_rms": 1.2,
+  "temp": 55.0
+}

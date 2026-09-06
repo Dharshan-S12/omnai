@@ -1,0 +1,5 @@
+{
+  "equipment_id": "PMP-201A",
+  "vibration_velocity_rms": 1.5,
+  "bearing_temperature": 60.0
+}

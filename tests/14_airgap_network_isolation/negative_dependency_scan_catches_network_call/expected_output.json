@@ -1,0 +1,5 @@
+{
+  "scan_result": "FAILED",
+  "flagged_module": "requests",
+  "airgap_violation_caught": true
+}

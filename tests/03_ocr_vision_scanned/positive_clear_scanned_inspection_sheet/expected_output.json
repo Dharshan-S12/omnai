@@ -1,0 +1,6 @@
+{
+  "extraction_path": "vision",
+  "confidence": ">=0.85",
+  "needs_manual_verification": false,
+  "equipment_tag": "BLR-302"
+}

@@ -1,0 +1,4 @@
+{
+  "equipment_id": "PMP-901",
+  "vibration_velocity_rms": 710.0
+}

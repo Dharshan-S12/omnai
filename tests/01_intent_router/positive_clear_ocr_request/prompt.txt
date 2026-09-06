@@ -1,0 +1,1 @@
+Perform OCR extraction on this attached scanned inspection document to extract vibration readings table: storage/samples/sample_pump_report.pdf

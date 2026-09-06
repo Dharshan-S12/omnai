@@ -1,0 +1,5 @@
+{
+  "equipment_id": "TRB-1105",
+  "vibration_velocity_rms": 8.2,
+  "bearing_temperature": 92.0
+}

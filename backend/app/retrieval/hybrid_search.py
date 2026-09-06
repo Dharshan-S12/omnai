@@ -70,6 +70,18 @@ class HybridSearchEngine:
         if not tokens:
             return []
         scores = self.bm25.get_scores(tokens)
+        
+        # If corpus is small (e.g. <= 3 docs) or scores are all 0 due to IDF log(1)=0,
+        # compute term frequency overlap boost
+        if not np.any(scores > 0):
+            tf_scores = np.zeros(len(self.doc_ids), dtype=np.float32)
+            for t in tokens:
+                for idx, doc_tokens in enumerate(self.tokenized_corpus):
+                    if t in doc_tokens:
+                        tf_scores[idx] += float(doc_tokens.count(t))
+            if np.any(tf_scores > 0):
+                scores = tf_scores
+
         top_indices = np.argsort(scores)[::-1][:top_k]
         
         results = []

@@ -113,11 +113,12 @@ def auto_detect_task_intent(
             log_router_decision(prompt_clean, "ocr", 0.98, res.routing_reason)
             return res
 
-    # Check for extremely short or ambiguous prompts (e.g. "report", "check", "run", "do this", "analyze", "test")
+    # Check for extremely short or ambiguous prompts (e.g. "report", "check", "check the pump", "analyze", "test")
     single_word_ambiguous = prompt_lower.strip() in [
-        "report", "check", "run", "analyze", "test", "status", "data", "file", "document", "calculate", "summary", "help"
+        "report", "check", "run", "analyze", "test", "status", "data", "file", "document", "calculate", "summary", "help",
+        "check the pump", "check pump", "inspect pump", "test system", "view status"
     ]
-    is_very_short = len(prompt_clean.split()) <= 2 and not re.search(r"[0-9]|(trb|pmp|cdu|hcu|fccu|sop)", prompt_lower)
+    is_very_short = (len(prompt_clean.split()) <= 3 and not re.search(r"\b[a-z]{2,4}-\d{2,4}[a-z]?\b|\b(sop|memo|docx|calculate|compute|rms|vibration|temp|iso|variance|integral|derivative)\b", prompt_lower))
 
     # 2. Check for Code Execution / Math / Computation Intent
     code_strong_pattern = r"\b(calculate|compute|solve|sum of|prime|primes|fibonacci|factorial|algorithm|numpy|pandas|derivative|integral|matrix multiplication|run python script|execute code|standard deviation|variance|mean of)\b"

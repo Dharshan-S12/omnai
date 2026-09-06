@@ -1,0 +1,7 @@
+{
+  "extraction_path": "digital",
+  "text_layer_quality": ">=0.70",
+  "equipment_tag": "PMP-201A",
+  "vibration_rms": 1.8,
+  "bearing_temp": 62.0
+}

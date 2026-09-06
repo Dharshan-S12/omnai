@@ -1,0 +1,5 @@
+{
+  "equipment_id": "PMP-201A",
+  "vibration_velocity_rms": 1.5,
+  "llm_draft_text": "Equipment PMP-201A vibration is 1.5 mm/s RMS, classified as Zone A Normal."
+}

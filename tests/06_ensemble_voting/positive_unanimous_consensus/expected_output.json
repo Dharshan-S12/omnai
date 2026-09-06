@@ -1,0 +1,10 @@
+{
+  "votes": [
+    "COMPLIANT",
+    "COMPLIANT",
+    "COMPLIANT"
+  ],
+  "consensus": true,
+  "dissent_logged": false,
+  "auto_proceeds": true
+}

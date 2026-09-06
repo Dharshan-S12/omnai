@@ -1,0 +1,6 @@
+{
+  "routed_intent": "disambiguation",
+  "confidence": "<0.65",
+  "is_disambiguation": true,
+  "options_shown": true
+}

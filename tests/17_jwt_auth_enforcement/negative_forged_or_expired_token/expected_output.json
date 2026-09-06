@@ -1,0 +1,5 @@
+{
+  "http_status": 401,
+  "authenticated": false,
+  "spoofed_header_ignored": true
+}

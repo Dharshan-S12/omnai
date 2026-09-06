@@ -1,0 +1,4 @@
+{
+  "force_failure_stage": "drafter",
+  "prompt": "Simulate pipeline failure"
+}
