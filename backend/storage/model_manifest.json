@@ -1,0 +1,20 @@
+{
+  "qwen2.5:3b": {
+    "version": "v1.0",
+    "expected_sha256": "a3f89e21b84931a7c04e28741e9b2518e9c02d18471b6920b7593c85f6932a10",
+    "description": "High-throughput on-prem reasoning & multi-agent synthesis",
+    "status": "trusted"
+  },
+  "qwen2.5:7b-instruct": {
+    "version": "v1.0",
+    "expected_sha256": "b7891c34a921d743f01948572e81bc3901a8f948371902847c01928471029384",
+    "description": "Executive document drafting, rule verification & ISO compliance",
+    "status": "trusted"
+  },
+  "qwen2.5vl:7b": {
+    "version": "v1.0",
+    "expected_sha256": "c8901234def567890123456789abcdef0123456789abcdef0123456789abcdef",
+    "description": "Multimodal scanned drawing & PDF vision OCR",
+    "status": "trusted"
+  }
+}

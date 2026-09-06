@@ -1,0 +1,103 @@
+{
+  "version": "1.2.0",
+  "last_updated": "2026-09-05T00:00:00Z",
+  "description": "MRPL Standard Operating Procedures & ISO 10816-3 Threshold Configurations",
+  "standards": {
+    "ISO_10816_3": {
+      "standard_name": "ISO 10816-3: Mechanical vibration — Evaluation of machine vibration by measurements on non-rotating parts",
+      "target_machines": ["pump", "turbine", "compressor", "motor", "blower"],
+      "class_group": "Group 1: Large machines on rigid foundations",
+      "parameters": {
+        "vibration_velocity_rms": {
+          "unit": "mm/s",
+          "field_aliases": [
+            "vibration_velocity_rms",
+            "vibration_rms",
+            "vibration_rms_mms",
+            "vibration",
+            "overall_vibration",
+            "vibe_rms",
+            "rms_velocity",
+            "vibration_level"
+          ],
+          "plausible_range": { "min": 0.0, "max": 100.0 },
+          "zones": {
+            "Zone A": {
+              "max": 2.8,
+              "verdict": "COMPLIANT",
+              "status": "PASS",
+              "label": "Zone A - Normal (Compliant)",
+              "action": "Normal continuous operation permitted. Standard inspection interval."
+            },
+            "Zone B": {
+              "min": 2.8,
+              "max": 4.5,
+              "verdict": "NEEDS_REVIEW",
+              "status": "PASS",
+              "label": "Zone B - Acceptable for Restricted Long-Term Operation (Alert)",
+              "action": "Schedule vibration spectral analysis within 14 days. Monitor trendline."
+            },
+            "Zone C": {
+              "min": 4.5,
+              "max": 7.1,
+              "verdict": "NON_COMPLIANT",
+              "status": "FAIL",
+              "label": "Zone C - Unsatisfactory (Non-Compliant / Action Required)",
+              "action": "Plan maintenance overhaul within 72 hours. Inspect bearings and misalignment."
+            },
+            "Zone D": {
+              "min": 7.1,
+              "max": 100.0,
+              "verdict": "NON_COMPLIANT",
+              "status": "FAIL",
+              "label": "Zone D - Unacceptable Vibration (Emergency Shutdown)",
+              "action": "IMMEDIATE EMERGENCY SHUTDOWN REQUIRED. Severe danger of catastrophic failure."
+            }
+          }
+        },
+        "bearing_temperature": {
+          "unit": "°C",
+          "field_aliases": [
+            "bearing_temperature",
+            "bearing_temp",
+            "bearing_temp_c",
+            "seal_temp",
+            "bearing_oil_temp",
+            "oil_temperature",
+            "bearing_casing_temp"
+          ],
+          "plausible_range": { "min": -20.0, "max": 250.0 },
+          "thresholds": {
+            "alert_limit": 70.0,
+            "max_allowable": 80.0
+          },
+          "action_on_fail": "Inspect lubrication system and bearing clearance. Reduce machine load."
+        }
+      }
+    },
+    "SOP_SAF_104": {
+      "standard_name": "MRPL SOP-SAF-104: High-Pressure Safety Valves & Emergency Shutdown (ESD)",
+      "target_machines": ["valve", "esd_valve", "relief_valve", "control_valve"],
+      "parameters": {
+        "operating_pressure": {
+          "unit": "bar",
+          "field_aliases": ["operating_pressure", "line_pressure", "line_pressure_bar", "inlet_pressure", "pressure"],
+          "plausible_range": { "min": 0.0, "max": 600.0 },
+          "thresholds": { "max_allowable": 150.0 }
+        },
+        "toxic_gas_concentration": {
+          "unit": "ppm",
+          "field_aliases": ["toxic_gas", "h2s_concentration", "gas_leak", "toxic_gas_concentration"],
+          "plausible_range": { "min": 0.0, "max": 1000.0 },
+          "thresholds": { "max_allowable": 25.0 }
+        },
+        "actuation_time": {
+          "unit": "s",
+          "field_aliases": ["actuation_time", "actuation_time_s", "closing_time", "stroke_time", "esd_trip_time"],
+          "plausible_range": { "min": 0.1, "max": 60.0 },
+          "thresholds": { "max_allowable": 2.5 }
+        }
+      }
+    }
+  }
+}

@@ -18,23 +18,226 @@ import {
   Files,
   ExternalLink,
   FileText,
+  ShieldAlert,
+  ShieldX,
+  UserCheck,
+  Lock,
+  CheckCircle2,
+  Loader2,
 } from "lucide-react";
-import { getDocxDownloadUrl, getTextDownloadUrl } from "../api";
+import { getDocxDownloadUrl, getTextDownloadUrl, approveTask, getUserRole } from "../api";
 import type { TaskItem } from "../api";
 
 interface TaskOutputViewProps {
   task: TaskItem;
+  onTaskUpdated?: () => void;
 }
 
-export const TaskOutputView: React.FC<TaskOutputViewProps> = ({ task }) => {
+function formatInlineMarkdown(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+  return parts.map((chunk, i) => {
+    if (chunk.startsWith("**") && chunk.endsWith("**") && chunk.length >= 4) {
+      return <strong key={i} className="font-bold text-slate-900">{chunk.slice(2, -2)}</strong>;
+    }
+    if (chunk.startsWith("`") && chunk.endsWith("`") && chunk.length >= 2) {
+      return (
+        <code key={i} className="px-1.5 py-0.5 rounded bg-slate-200/80 border border-slate-300 text-slate-900 font-mono text-[12px]">
+          {chunk.slice(1, -1)}
+        </code>
+      );
+    }
+    return chunk;
+  });
+}
+
+export const RichMarkdownText: React.FC<{ content: string }> = ({ content }) => {
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  const handleCopyCode = (code: string, idx: number) => {
+    navigator.clipboard.writeText(code);
+    setCopiedIndex(idx);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  if (!content) return null;
+
+  const parts = content.split(/(```[\s\S]*?```)/g);
+
+  return (
+    <div className="space-y-3 font-sans text-sm text-slate-800 leading-relaxed">
+      {parts.map((part, index) => {
+        if (part.startsWith("```")) {
+          const match = part.match(/^```(\w+)?\s*([\s\S]*?)```$/);
+          const lang = match ? match[1] || "code" : "code";
+          const code = match ? match[2].trim() : part.replace(/^```|```$/g, "").trim();
+
+          return (
+            <div key={index} className="my-3 rounded-xl overflow-hidden border border-slate-800 bg-slate-950 shadow-md">
+              <div className="flex items-center justify-between px-3.5 py-1.5 bg-slate-900 border-b border-slate-800 text-[11px] font-mono text-slate-400">
+                <span className="font-semibold uppercase text-emerald-400">{lang}</span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyCode(code, index)}
+                  className="inline-flex items-center gap-1 hover:text-white transition-colors cursor-pointer text-slate-300"
+                >
+                  {copiedIndex === index ? (
+                    <>
+                      <Check className="h-3 w-3 text-emerald-400" />
+                      <span className="text-emerald-400 font-bold">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3 w-3" />
+                      <span>Copy Code</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <pre className="p-4 overflow-x-auto text-xs font-mono text-emerald-300 leading-relaxed whitespace-pre">
+                <code>{code}</code>
+              </pre>
+            </div>
+          );
+        }
+
+        const lines = part.split("\n");
+        return (
+          <div key={index} className="space-y-1.5">
+            {lines.map((line, lIdx) => {
+              const trimmed = line.trim();
+              if (!trimmed) return <div key={lIdx} className="h-1" />;
+
+              if (trimmed.startsWith("#### ")) {
+                return (
+                  <h5 key={lIdx} className="text-xs font-bold text-slate-900 mt-2 mb-0.5 font-sans uppercase tracking-wider text-slate-700">
+                    {trimmed.replace(/^####\s*/, "")}
+                  </h5>
+                );
+              }
+              if (trimmed.startsWith("### ")) {
+                return (
+                  <h4 key={lIdx} className="text-sm font-bold text-slate-900 mt-3 mb-1 font-sans flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                    <span>{trimmed.replace(/^###\s*/, "")}</span>
+                  </h4>
+                );
+              }
+              if (trimmed.startsWith("## ")) {
+                return (
+                  <h3 key={lIdx} className="text-base font-bold text-slate-900 mt-4 mb-1.5 pb-1 border-b border-slate-200 font-sans">
+                    {trimmed.replace(/^##\s*/, "")}
+                  </h3>
+                );
+              }
+              if (trimmed.startsWith("# ")) {
+                return (
+                  <h2 key={lIdx} className="text-lg font-bold text-slate-900 mt-3 mb-2 font-sans text-emerald-950">
+                    {trimmed.replace(/^#\s*/, "")}
+                  </h2>
+                );
+              }
+
+              if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+                const itemText = trimmed.replace(/^[-*]\s*/, "");
+                return (
+                  <div key={lIdx} className="flex items-start gap-2 pl-2">
+                    <span className="text-emerald-700 font-bold text-xs mt-0.5">•</span>
+                    <span className="text-slate-800 leading-snug">
+                      {formatInlineMarkdown(itemText)}
+                    </span>
+                  </div>
+                );
+              }
+
+              if (/^\d+\.\s/.test(trimmed)) {
+                const matchNum = trimmed.match(/^(\d+)\.\s*(.*)$/);
+                return (
+                  <div key={lIdx} className="flex items-start gap-2 pl-2">
+                    <span className="font-mono font-bold text-xs text-emerald-800 shrink-0 mt-0.5">
+                      {matchNum ? matchNum[1] : "1"}.
+                    </span>
+                    <span className="text-slate-800 leading-snug">
+                      {formatInlineMarkdown(matchNum ? matchNum[2] : trimmed)}
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <p key={lIdx} className="text-slate-800 leading-relaxed font-sans">
+                  {formatInlineMarkdown(line)}
+                </p>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export const TaskOutputView: React.FC<TaskOutputViewProps> = ({ task, onTaskUpdated }) => {
   const [copied, setCopied] = useState(false);
   const [ocrTab, setOcrTab] = useState<"structured" | "raw">("structured");
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+
+  // Approval Form State
+  const [reviewerName, setReviewerName] = useState("Supervisor Reviewer");
+  const [reviewerNotes, setReviewerNotes] = useState("");
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleApprovalDecision = async (approved: boolean) => {
+    setIsSubmittingApproval(true);
+    setApprovalError(null);
+    try {
+      await approveTask(task.id, {
+        approved,
+        reviewer_name: reviewerName.trim() || "Supervisor Reviewer",
+        reviewer_notes: reviewerNotes.trim() || undefined,
+      });
+      if (onTaskUpdated) {
+        onTaskUpdated();
+      }
+    } catch (err: any) {
+      setApprovalError(err.message || "Failed to submit approval decision");
+    } finally {
+      setIsSubmittingApproval(false);
+    }
+  };
+
+  const renderConfidenceBadge = (score?: number | null) => {
+    if (score === undefined || score === null) return null;
+    const isHigh = score >= 80;
+    const isMedium = score >= 50 && score < 80;
+
+    let bgClass = "bg-emerald-50 text-emerald-900 border-emerald-300";
+    let dotClass = "bg-emerald-500";
+    let label = "High Grounding Reliability";
+
+    if (isMedium) {
+      bgClass = "bg-amber-50 text-amber-900 border-amber-300";
+      dotClass = "bg-amber-500";
+      label = "Moderate Confidence";
+    } else if (!isHigh) {
+      bgClass = "bg-rose-50 text-rose-900 border-rose-300";
+      dotClass = "bg-rose-500";
+      label = "Grounding Concerns Flagged";
+    }
+
+    return (
+      <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-mono font-bold border ${bgClass} shadow-xs`}>
+        <span className={`h-2 w-2 rounded-full ${dotClass}`} />
+        <span>Confidence: {score}%</span>
+        <span className="text-[10px] opacity-75 font-sans font-normal hidden sm:inline">({label})</span>
+      </div>
+    );
   };
 
   // ----------------------------------------------------
@@ -128,7 +331,10 @@ export const TaskOutputView: React.FC<TaskOutputViewProps> = ({ task }) => {
     );
   }
 
-  if (task.status !== "done" || !task.output_ref) {
+  if (
+    (task.status !== "done" && task.status !== "pending_approval" && task.status !== "rejected") ||
+    !task.output_ref
+  ) {
     return null;
   }
 
@@ -539,9 +745,7 @@ export const TaskOutputView: React.FC<TaskOutputViewProps> = ({ task }) => {
           <div className="text-xs font-mono text-slate-500 mb-3 uppercase tracking-wider font-bold">
             Synthesized Intelligence Summary
           </div>
-          <div className="text-sm text-slate-800 font-sans leading-relaxed whitespace-pre-wrap">
-            {task.output_ref}
-          </div>
+          <RichMarkdownText content={task.output_ref} />
         </div>
       </div>
     );
@@ -551,49 +755,240 @@ export const TaskOutputView: React.FC<TaskOutputViewProps> = ({ task }) => {
   // 3. doc_gen Output Renderer
   // ----------------------------------------------------
   if (task.task_type === "doc_gen") {
+    const isPendingApproval = task.status === "pending_approval";
+    const isRejected = task.status === "rejected";
+    const approvalStep = task.steps?.find((s) => s.tool_called === "human_approval");
+
     return (
-      <div className="mt-4 bg-white border border-emerald-200 rounded-2xl p-6 shadow-xs">
-        <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-100 flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800">
-              <FileCheck className="h-6 w-6" />
+      <div className="mt-4 space-y-4">
+        {/* PENDING APPROVAL SUPERVISOR ACTION BANNER */}
+        {isPendingApproval && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
+              <div className="flex items-start gap-3.5">
+                <div className="h-10 w-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 shrink-0 mt-0.5">
+                  <ShieldAlert className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h3 className="text-base font-bold text-slate-900 font-sans">
+                      Mandatory Quality Gate: Supervisor Sign-off Required
+                    </h3>
+                    {renderConfidenceBadge(task.confidence_score)}
+                  </div>
+                  <p className="text-xs text-amber-900 mt-1 font-sans leading-relaxed">
+                    This executive document was synthesized autonomously with local self-critique checks. 
+                    Release is <strong>locked</strong> until reviewed and authorized by an approved supervisor.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100/80 border border-amber-300 text-xs font-mono font-bold text-amber-900">
+                <Lock className="h-3.5 w-3.5 text-amber-700" />
+                <span>Word Download Locked</span>
+              </div>
             </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900 font-sans flex items-center gap-2">
-                Executive Word Document Generated
-              </h3>
-              <p className="text-xs text-emerald-800 font-mono font-medium">
-                Formatted with MRPL SOP standards, styling, & confidentiality footer
-              </p>
+
+            {/* Inline Approval Form */}
+            <div className="bg-white border border-amber-200 rounded-xl p-4.5 mt-4 space-y-3.5 shadow-xs">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="text-xs font-mono font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <UserCheck className="h-4 w-4 text-emerald-700" />
+                  <span>Supervisor Review & Release Authorization</span>
+                </div>
+                {getUserRole() === "operator" && (
+                  <span className="text-[11px] font-mono font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                    <Lock className="h-3 w-3 text-amber-700" />
+                    Operator Role (Read-Only)
+                  </span>
+                )}
+              </div>
+
+              {getUserRole() === "operator" ? (
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 font-sans leading-relaxed">
+                  <span className="font-bold text-slate-800 font-mono block mb-1">
+                    🔒 Elevated Privileges Required:
+                  </span>
+                  You are currently logged in as an <strong>Operator</strong>. Document approvals and cryptographic release signatures require a <strong>Supervisor</strong> role. Please switch your role using the toggle in the top header bar to authorize this document.
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-mono font-semibold text-slate-600 mb-1">
+                        Reviewer Name / Role
+                      </label>
+                      <input
+                        type="text"
+                        value={reviewerName}
+                        onChange={(e) => setReviewerName(e.target.value)}
+                        placeholder="e.g. Lead Process Engineer"
+                        className="w-full text-xs font-sans px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-600 bg-slate-50"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] font-mono font-semibold text-slate-600 mb-1">
+                        Reviewer Notes / Verification Justification
+                      </label>
+                      <input
+                        type="text"
+                        value={reviewerNotes}
+                        onChange={(e) => setReviewerNotes(e.target.value)}
+                        placeholder="e.g. Verified against SOP-MNT-042 vibration thresholds. Compliance confirmed."
+                        className="w-full text-xs font-sans px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-600 bg-slate-50"
+                      />
+                    </div>
+                  </div>
+
+                  {approvalError && (
+                    <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800 font-sans">
+                      {approvalError}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      disabled={isSubmittingApproval}
+                      onClick={() => handleApprovalDecision(false)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-rose-700 hover:bg-rose-50 border border-rose-300 hover:border-rose-400 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <ShieldX className="h-4 w-4 text-rose-600" />
+                      <span>Reject Document</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSubmittingApproval}
+                      onClick={() => handleApprovalDecision(true)}
+                      className="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-2 px-5 rounded-xl shadow-md shadow-emerald-900/20 transition-all text-xs cursor-pointer hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                    >
+                      {isSubmittingApproval ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Submitting Sign-off...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>Approve & Unlock Release</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* REJECTED BANNER */}
+        {isRejected && (
+          <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-start gap-3.5 mb-3">
+              <div className="h-10 w-10 rounded-xl bg-rose-100 border border-rose-300 flex items-center justify-center text-rose-800 shrink-0">
+                <ShieldX className="h-6 w-6" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h3 className="text-base font-bold text-rose-900 font-sans">
+                    Document Generation Rejected by Supervisor
+                  </h3>
+                  {renderConfidenceBadge(task.confidence_score)}
+                </div>
+                <p className="text-xs text-rose-800 mt-1 font-sans leading-relaxed">
+                  This document was marked rejected during human safety verification. Official Word (.docx) download remains locked.
+                </p>
+                {approvalStep && (
+                  <div className="mt-3 p-3 bg-white/80 border border-rose-200 rounded-xl text-xs font-sans text-rose-900 space-y-1">
+                    <div className="font-bold flex items-center gap-2">
+                      <span>Rejected by: {approvalStep.tool_result?.reviewer_name || "Supervisor"}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">({approvalStep.tool_result?.timestamp || ""})</span>
+                    </div>
+                    {approvalStep.tool_result?.reviewer_notes && (
+                      <div className="text-slate-700 font-mono bg-slate-50 p-2 rounded border border-slate-200">
+                        Reason: {approvalStep.tool_result.reviewer_notes}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MAIN DOCUMENT CARD */}
+        <div className="bg-white border border-emerald-200 rounded-2xl p-6 shadow-xs">
+          <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-100 flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800">
+                <FileCheck className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h3 className="text-base font-bold text-slate-900 font-sans">
+                    Executive Word Document Output
+                  </h3>
+                  {renderConfidenceBadge(task.confidence_score)}
+                </div>
+                <p className="text-xs text-emerald-800 font-mono font-medium">
+                  Formatted with MRPL SOP standards, styling, & confidentiality footer
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleCopy(task.output_ref || "")}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-200"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                <span>{copied ? "Copied" : "Copy Text"}</span>
+              </button>
+
+              {!isPendingApproval && !isRejected ? (
+                <a
+                  href={getDocxDownloadUrl(task.id)}
+                  download={`document_${task.id.slice(0, 8)}.docx`}
+                  className="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-2 px-5 rounded-xl shadow-md shadow-emerald-900/20 transition-all text-xs cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Download Word (.docx)</span>
+                </a>
+              ) : (
+                <button
+                  disabled
+                  className="inline-flex items-center gap-2 bg-slate-200 text-slate-500 font-semibold py-2 px-5 rounded-xl text-xs cursor-not-allowed border border-slate-300"
+                  title="Approval required to unlock download"
+                >
+                  <Lock className="h-3.5 w-3.5" />
+                  <span>Download Locked</span>
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => handleCopy(task.output_ref || "")}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-200"
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-              <span>{copied ? "Copied" : "Copy Text"}</span>
-            </button>
+          {/* Supervisor Approval Stamp if Approved */}
+          {approvalStep && task.status === "done" && (
+            <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center justify-between flex-wrap gap-2 text-xs">
+              <div className="flex items-center gap-2 text-emerald-900 font-sans">
+                <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0" />
+                <span>
+                  <strong>Supervisor Verified:</strong> Approved by {approvalStep.tool_result?.reviewer_name || "Supervisor"}
+                  {approvalStep.tool_result?.reviewer_notes ? ` — "${approvalStep.tool_result.reviewer_notes}"` : ""}
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-emerald-700">Official Release Ready</span>
+            </div>
+          )}
 
-            <a
-              href={getDocxDownloadUrl(task.id)}
-              download={`document_${task.id.slice(0, 8)}.docx`}
-              className="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-2 px-5 rounded-xl shadow-md shadow-emerald-900/20 transition-all text-xs cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <Download className="h-4 w-4" />
-              <span>Download Word (.docx)</span>
-            </a>
-          </div>
-        </div>
-
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 overflow-hidden">
-          <div className="text-xs font-mono text-slate-500 mb-3 uppercase tracking-wider font-bold">
-            Synthesized Document Preview
-          </div>
-          <div className="text-sm text-slate-800 font-sans leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto pr-2">
-            {task.output_ref}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 overflow-hidden">
+            <div className="text-xs font-mono text-slate-500 mb-3 uppercase tracking-wider font-bold">
+              Synthesized Document Preview
+            </div>
+            <div className="max-h-96 overflow-y-auto pr-2">
+              <RichMarkdownText content={task.output_ref} />
+            </div>
           </div>
         </div>
       </div>
@@ -638,8 +1033,8 @@ export const TaskOutputView: React.FC<TaskOutputViewProps> = ({ task }) => {
         </div>
 
         <div className="space-y-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 font-mono text-xs text-amber-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
-            {task.output_ref}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+            <RichMarkdownText content={task.output_ref} />
           </div>
         </div>
       </div>
@@ -682,8 +1077,8 @@ export const TaskOutputView: React.FC<TaskOutputViewProps> = ({ task }) => {
         </div>
       </div>
 
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-sm text-slate-800 font-sans leading-relaxed whitespace-pre-wrap">
-        {task.output_ref}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+        <RichMarkdownText content={task.output_ref} />
       </div>
     </div>
   );

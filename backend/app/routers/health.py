@@ -36,13 +36,16 @@ async def health_check():
 
     # 3. Model Router Status
     from app.router.model_router import get_installed_models, CAPABILITY_PRIORITY_TIERS
+    from app.database import get_db_health_info
     installed_models = await get_installed_models()
+    db_health = get_db_health_info()
 
     overall_status = "ok" if (db_status == "connected" and ollama_status == "connected") else "degraded"
 
     return {
         "status": overall_status,
         "db": db_status,
+        "db_health": db_health,
         "ollama_status": ollama_status,
         "ollama_models": ollama_models,
         "router_ready": bool(installed_models),

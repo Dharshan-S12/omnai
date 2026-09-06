@@ -1,8 +1,8 @@
 import React from "react";
-import { Clock, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Clock, Loader2, CheckCircle2, AlertCircle, ShieldAlert, XCircle } from "lucide-react";
 
 interface TaskStatusBadgeProps {
-  status: "pending" | "running" | "done" | "failed" | string;
+  status: "pending" | "running" | "done" | "failed" | "pending_approval" | "rejected" | string;
   size?: "sm" | "md" | "lg";
 }
 
@@ -32,6 +32,15 @@ export const TaskStatusBadge: React.FC<TaskStatusBadgeProps> = ({ status, size =
           <span>Running</span>
         </span>
       );
+    case "pending_approval":
+      return (
+        <span
+          className={`inline-flex items-center font-bold rounded-full bg-amber-50 text-amber-900 border border-amber-300 shadow-xs ${sizeClasses}`}
+        >
+          <ShieldAlert className={`${size === "lg" ? "h-4 w-4" : "h-3.5 w-3.5"} text-amber-700`} />
+          <span>Awaiting Approval</span>
+        </span>
+      );
     case "done":
       return (
         <span
@@ -39,6 +48,15 @@ export const TaskStatusBadge: React.FC<TaskStatusBadgeProps> = ({ status, size =
         >
           <CheckCircle2 className={size === "lg" ? "h-4 w-4" : "h-3.5 w-3.5"} />
           <span>Completed</span>
+        </span>
+      );
+    case "rejected":
+      return (
+        <span
+          className={`inline-flex items-center font-bold rounded-full bg-rose-50 text-rose-900 border border-rose-300 ${sizeClasses}`}
+        >
+          <XCircle className={`${size === "lg" ? "h-4 w-4" : "h-3.5 w-3.5"} text-rose-700`} />
+          <span>Rejected</span>
         </span>
       );
     case "failed":

@@ -5,6 +5,8 @@ import UploadView from "./views/UploadView";
 import TaskListView from "./views/TaskListView";
 import TaskDetailView from "./views/TaskDetailView";
 import MonitorView from "./views/MonitorView";
+import { EquipmentGraphView } from "./views/EquipmentGraphView";
+import { EquipmentDetailView } from "./views/EquipmentDetailView";
 
 function App() {
   return (
@@ -16,6 +18,8 @@ function App() {
           <Route path="tasks" element={<TaskListView />} />
           <Route path="upload" element={<UploadView />} />
           <Route path="task/:id" element={<TaskDetailView />} />
+          <Route path="equipment" element={<EquipmentGraphView />} />
+          <Route path="equipment/:equipment_id" element={<EquipmentDetailView />} />
           <Route path="monitor" element={<MonitorView />} />
         </Route>
       </Routes>

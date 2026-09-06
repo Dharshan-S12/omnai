@@ -24,7 +24,7 @@ import {
   uploadFile,
   fetchTaskDetails,
 } from "../api";
-import type { TaskItem } from "../api";
+import type { TaskItem, DisambiguationResponse } from "../api";
 import { TaskOutputView } from "../components/TaskOutputView";
 
 interface ChatMessage {
@@ -37,6 +37,7 @@ interface ChatMessage {
   };
   taskId?: string;
   taskData?: TaskItem;
+  disambiguation?: DisambiguationResponse;
   timestamp: string;
 }
 
@@ -178,23 +179,44 @@ export default function ChatView() {
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
+    // Immediately push user message and loading placeholder into state so they render in chat
     setMessages((prev) => [...prev, userMsg, placeholderAssistantMsg]);
 
-    try {
-      const createdTask = await createAutoTask(text, fileToSend);
+    // Find the most recent task ID in the chat history for conversational context chaining
+    const previousTaskMsg = [...messages].reverse().find((m) => m.taskId && m.taskId !== "error");
+    const sourceTaskId = previousTaskMsg?.taskId || null;
 
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMessageId
-            ? {
-                ...m,
-                taskId: createdTask.id,
-                taskData: createdTask,
-                content: createdTask.output_ref || "Task dispatched to sovereign engine...",
-              }
-            : m
-        )
-      );
+    try {
+      const res = await createAutoTask(text, fileToSend, sourceTaskId);
+
+      if ("is_disambiguation" in res && res.is_disambiguation) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  content: res.message || "Please disambiguate your intent.",
+                  disambiguation: res,
+                  taskData: undefined,
+                }
+              : m
+          )
+        );
+      } else {
+        const createdTask = res as TaskItem;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  taskId: createdTask.id,
+                  taskData: createdTask,
+                  content: createdTask.output_ref || "Task dispatched to sovereign engine...",
+                }
+              : m
+          )
+        );
+      }
     } catch (err: any) {
       setMessages((prev) =>
         prev.map((m) =>
@@ -212,11 +234,87 @@ export default function ChatView() {
                 },
               }
             : m
+          )
+        );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSelectDisambiguationOption = async (
+    prompt: string,
+    taskType: string,
+    filePath?: string | null,
+    msgId?: string
+  ) => {
+    setIsProcessing(true);
+    const assistantMessageId = msgId || `asst_${Date.now()}`;
+    
+    // Update message to loading
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === assistantMessageId
+          ? {
+              ...m,
+              content: `Dispatching as confirmed intent: ${taskType}...`,
+              disambiguation: undefined,
+            }
+          : m
+      )
+    );
+
+    try {
+      const res = await createAutoTask(prompt, filePath, null, taskType);
+      const createdTask = res as TaskItem;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMessageId
+            ? {
+                ...m,
+                taskId: createdTask.id,
+                taskData: createdTask,
+                content: createdTask.output_ref || `Task dispatched as ${taskType}`,
+                disambiguation: undefined,
+              }
+            : m
+        )
+      );
+    } catch (err: any) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMessageId
+            ? {
+                ...m,
+                content: `Error executing confirmed task: ${err.message}`,
+              }
+            : m
         )
       );
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleRefreshTask = async (taskId: string) => {
+    try {
+      const updated = await fetchTaskDetails(taskId);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.taskId === taskId
+            ? { ...m, taskData: updated, content: updated.output_ref || m.content }
+            : m
+        )
+      );
+    } catch {
+      // quiet fallback
+    }
+  };
+
+  const handleRetry = (promptText: string, filePath?: string) => {
+    if (filePath) {
+      setAttachedFile({ name: filePath.split("/").pop() || "Attached File", path: filePath });
+    }
+    handleSendMessage(promptText);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -448,6 +546,81 @@ export default function ChatView() {
                         </div>
                       )}
 
+                      {/* Disambiguation Prompt Card (Below Threshold Routing) */}
+                      {msg.disambiguation && (
+                        <div className="p-4 bg-amber-50/80 border border-amber-300 rounded-xl space-y-3 shadow-xs">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="p-1.5 rounded-lg bg-amber-100 text-amber-900 border border-amber-300">
+                                <AlertCircle className="h-4 w-4 text-amber-700" />
+                              </span>
+                              <div>
+                                <h4 className="text-xs font-bold font-mono text-amber-950 uppercase">
+                                  Routing Disambiguation Required
+                                </h4>
+                                <p className="text-[11px] text-amber-800">
+                                  Classifier confidence ({Math.round(msg.disambiguation.confidence * 100)}%) is below sovereign auto-execution threshold (65%).
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded border border-amber-300">
+                              0.65 Safety Gate
+                            </span>
+                          </div>
+
+                          <div className="pt-1">
+                            <p className="text-xs font-semibold text-slate-800 mb-2">
+                              Did you mean to execute:
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {msg.disambiguation.options?.map((opt) => (
+                                <button
+                                  key={opt.task_type}
+                                  type="button"
+                                  onClick={() =>
+                                    handleSelectDisambiguationOption(
+                                      msg.disambiguation!.prompt,
+                                      opt.task_type,
+                                      msg.disambiguation!.file_path,
+                                      msg.id
+                                    )
+                                  }
+                                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between hover:shadow-sm ${
+                                    opt.task_type === msg.disambiguation?.suggested_task_type
+                                      ? "bg-white border-emerald-500 ring-2 ring-emerald-500/20"
+                                      : "bg-white/80 hover:bg-white border-slate-200 hover:border-emerald-300"
+                                  }`}
+                                >
+                                  <div>
+                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                      <span className="text-xs font-bold text-slate-900 font-sans">
+                                        {opt.label}
+                                      </span>
+                                      {opt.task_type === msg.disambiguation?.suggested_task_type && (
+                                        <span className="text-[9px] font-mono font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
+                                          Suggested
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-600 line-clamp-2">
+                                      {opt.description}
+                                    </p>
+                                  </div>
+
+                                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] font-mono">
+                                    <span className="text-slate-500">{opt.model_name}</span>
+                                    <span className="text-emerald-700 font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                                      <span>Select</span>
+                                      <ChevronRight className="h-3 w-3" />
+                                    </span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Execution Steps Stream Sequence */}
                       {msg.taskData?.steps && msg.taskData.steps.length > 0 && (
                         <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-1.5">
@@ -477,10 +650,46 @@ export default function ChatView() {
                         </div>
                       )}
 
-                      {/* Render Rich Output Component when Done */}
+                      {/* Active Execution Live Progress Banner */}
+                      {msg.taskData && ["pending", "running"].includes(msg.taskData.status) && (
+                        <div className="p-3.5 bg-sky-50/70 border border-sky-200 rounded-xl flex items-center justify-between gap-3 text-xs font-mono text-sky-900">
+                          <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-2.5 w-2.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-600"></span>
+                            </span>
+                            <span className="font-semibold">
+                              {msg.taskData.steps && msg.taskData.steps.length > 0
+                                ? `Executing: ${msg.taskData.steps[msg.taskData.steps.length - 1].description}`
+                                : "OmniAI multi-agent engine reasoning in progress..."}
+                            </span>
+                          </div>
+                          <span className="text-[10px] bg-sky-100 border border-sky-300 px-2 py-0.5 rounded font-bold uppercase tracking-wider text-sky-800 shrink-0">
+                            Local GPU Active
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Render Rich Output Component when Done or Failed or Pending Approval */}
                       {msg.taskData && (
                         <div className="pt-1">
-                          <TaskOutputView task={msg.taskData} />
+                          <TaskOutputView
+                            task={msg.taskData}
+                            onTaskUpdated={() => msg.taskId && handleRefreshTask(msg.taskId)}
+                          />
+                        </div>
+                      )}
+
+                      {/* Failed Task Retry Button */}
+                      {msg.taskData?.status === "failed" && (
+                        <div className="pt-2 flex justify-end">
+                          <button
+                            onClick={() => handleRetry(msg.taskData?.input_ref || "")}
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            <span>Retry Request</span>
+                          </button>
                         </div>
                       )}
                     </div>

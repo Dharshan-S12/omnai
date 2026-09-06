@@ -13,7 +13,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.database import engine, Base
-from app.routers import health, files, tasks, kb, monitor
+import app.models  # Ensures all models are bound to Base.metadata
+from app.routers import health, files, tasks, kb, monitor, memory, graph, audit, auth
 from app.monitor.network_watch import start_network_monitor_loop, stop_network_monitor_loop
 
 @asynccontextmanager
@@ -30,8 +31,16 @@ async def lifespan(app: FastAPI):
             await conn.run_sync(Base.metadata.create_all)
             if engine.dialect.name == "postgresql":
                 await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS source_task_id UUID REFERENCES tasks(id);"))
+                await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS confidence_score FLOAT;"))
                 try:
                     await conn.execute(text("ALTER TYPE tasktype ADD VALUE IF NOT EXISTS 'cross_doc_query';"))
+                    await conn.execute(text("ALTER TYPE taskstatus ADD VALUE IF NOT EXISTS 'pending_approval';"))
+                    await conn.execute(text("ALTER TYPE taskstatus ADD VALUE IF NOT EXISTS 'rejected';"))
+                except Exception:
+                    pass
+            elif engine.dialect.name == "sqlite":
+                try:
+                    await conn.execute(text("ALTER TABLE tasks ADD COLUMN confidence_score FLOAT;"))
                 except Exception:
                     pass
         print(f"Database initialized successfully ({engine.dialect.name})")
@@ -59,4 +68,8 @@ app.include_router(health.router)
 app.include_router(files.router)
 app.include_router(tasks.router)
 app.include_router(kb.router)
+app.include_router(memory.router)
+app.include_router(graph.router)
 app.include_router(monitor.router)
+app.include_router(audit.router)
+app.include_router(auth.router)

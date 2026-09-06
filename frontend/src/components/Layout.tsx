@@ -10,16 +10,20 @@ import {
   AlertCircle,
   Database,
   Layers,
-  Gauge
+  Gauge,
+  UserCheck,
+  ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
-import { fetchTasks, fetchNetworkStatus, fetchHealthStatus } from "../api";
-import type { HealthStatus } from "../api";
+import { fetchTasks, fetchNetworkStatus, fetchHealthStatus, getUserRole, setUserRole } from "../api";
+import type { HealthStatus, UserRole } from "../api";
 
 export default function Layout() {
   const location = useLocation();
   const [runningCount, setRunningCount] = useState<number>(0);
   const [externalCalls, setExternalCalls] = useState<number>(0);
   const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [role, setRoleState] = useState<UserRole>(getUserRole());
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -55,15 +59,54 @@ export default function Layout() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleRoleToggle = () => {
+    const nextRole: UserRole = role === "supervisor" ? "operator" : "supervisor";
+    setUserRole(nextRole);
+    setRoleState(nextRole);
+  };
+
   const isOmniActive = location.pathname === "/" || location.pathname === "/chat";
   const isUploadActive = location.pathname === "/upload";
   const isTasksActive = location.pathname === "/tasks" || location.pathname.startsWith("/task/");
+  const isEquipmentActive = location.pathname.startsWith("/equipment");
   const isMonitorActive = location.pathname === "/monitor";
 
   const isOllamaConnected = health?.ollama_status === "connected";
+  const isDbFallback = health?.db_health?.is_fallback === true;
+  const isBackendUnreachable = health?.db === "unreachable";
 
   return (
     <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-900 font-sans antialiased overflow-hidden">
+      {/* Top Persistent SQLite Fallback Warning Banner */}
+      {isDbFallback && (
+        <div className="bg-amber-600 text-white px-4 py-1.5 text-xs font-mono font-semibold flex items-center justify-between shadow-xs z-30 shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-200 animate-pulse" />
+            <span>
+              <strong>REDUCED-INTEGRITY MODE:</strong> Running on SQLite local database fallback — multi-user concurrent writes and JSON graph queries may degrade.
+            </span>
+          </div>
+          <span className="text-[10px] bg-amber-800/60 px-2 py-0.5 rounded border border-amber-400/40">
+            AUTO-FALLBACK ACTIVE
+          </span>
+        </div>
+      )}
+
+      {/* Backend Disconnection Banner */}
+      {isBackendUnreachable && (
+        <div className="bg-rose-700 text-white px-4 py-1.5 text-xs font-mono font-semibold flex items-center justify-between shadow-xs z-30 shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 text-rose-200 animate-pulse" />
+            <span>
+              <strong>BACKEND SERVICE OFFLINE:</strong> Could not establish connection with FastAPI backend server on port 8000.
+            </span>
+          </div>
+          <span className="text-[10px] bg-rose-900 px-2 py-0.5 rounded">
+            PORT 8000 UNREACHABLE
+          </span>
+        </div>
+      )}
+
       {/* Top MRPL Corporate Branding & Industrial Status Bar */}
       <header className="bg-white border-b border-slate-200/90 px-5 py-2.5 flex items-center justify-between shadow-xs shrink-0 z-20">
         <div className="flex items-center gap-4">
@@ -91,13 +134,36 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* Live Refinery Telemetry & Air-Gap Compliance Ticker */}
+        {/* Live Refinery Telemetry, Role Switcher & Air-Gap Compliance Ticker */}
         <div className="flex items-center gap-3">
           {/* Active Refinery Plant Node */}
           <div className="hidden lg:flex items-center gap-2 bg-slate-100/80 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-mono text-[11px]">
             <Gauge className="h-3.5 w-3.5 text-emerald-700" />
-            <span>Kuthethoor Refinery Complex</span>
+            <span>Kuthethoor Complex</span>
           </div>
+
+          {/* User Role Switcher Pill (Operator vs Supervisor) */}
+          <button
+            onClick={handleRoleToggle}
+            title="Click to toggle between Operator and Supervisor roles"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-bold border transition-all shadow-xs cursor-pointer ${
+              role === "supervisor"
+                ? "bg-purple-50 text-purple-900 border-purple-300 hover:bg-purple-100"
+                : "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200"
+            }`}
+          >
+            {role === "supervisor" ? (
+              <>
+                <ShieldCheck className="h-3.5 w-3.5 text-purple-700" />
+                <span>Role: SUPERVISOR (Approver)</span>
+              </>
+            ) : (
+              <>
+                <UserCheck className="h-3.5 w-3.5 text-slate-600" />
+                <span>Role: OPERATOR (Read-Only Gates)</span>
+              </>
+            )}
+          </button>
 
           {/* Air-Gap Security Pill */}
           <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg font-mono text-[11px] text-emerald-900 font-bold shadow-xs">
@@ -112,17 +178,15 @@ export default function Layout() {
       <div className="flex flex-1 overflow-hidden">
         {/* Bespoke MRPL Sidebar Navigation */}
         <aside className="w-64 border-r border-slate-200 bg-white flex flex-col shrink-0 shadow-xs z-10">
-          {/* Sidebar Section Title */}
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
               Cognitive Workspaces
             </span>
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
-              v2.4 Sovereign
+              v2.5 Hardened
             </span>
           </div>
 
-          {/* Navigation Links */}
           <nav className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
             <Link
               to="/chat"
@@ -174,6 +238,25 @@ export default function Layout() {
                   {runningCount}
                 </span>
               )}
+            </Link>
+
+            <Link
+              to="/equipment"
+              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                isEquipmentActive
+                  ? "bg-emerald-700 text-white font-semibold shadow-md shadow-emerald-900/15"
+                  : "text-slate-700 hover:text-emerald-900 hover:bg-emerald-50/80 border border-transparent"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Database className={`h-4 w-4 ${isEquipmentActive ? "text-white" : "text-emerald-700"}`} />
+                <span>Equipment Graph</span>
+              </div>
+              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                isEquipmentActive ? "bg-emerald-900/60 text-emerald-100" : "bg-indigo-50 text-indigo-700 border border-indigo-200"
+              }`}>
+                TOPOLOGY
+              </span>
             </Link>
 
             <Link
@@ -233,9 +316,8 @@ export default function Layout() {
             </div>
           </nav>
 
-          {/* System Hardware & PostgreSQL DB Footer */}
+          {/* System Hardware & DB Footer */}
           <div className="p-3 border-t border-slate-200 text-xs font-mono space-y-2 bg-slate-50/70">
-            {/* Ollama Local Engine Status */}
             <div
               className={`p-2.5 rounded-xl border flex flex-col gap-1 transition-all ${
                 isOllamaConnected
@@ -271,14 +353,15 @@ export default function Layout() {
               )}
             </div>
 
-            {/* Database & On-Prem Sovereign Specs */}
             <div className="bg-white border border-slate-200 rounded-xl p-2.5 space-y-1 text-[11px]">
               <div className="flex items-center justify-between text-slate-600">
                 <span className="flex items-center gap-1.5 font-medium">
                   <Database className="h-3 w-3 text-emerald-700" />
-                  Task Ledger DB
+                  DB Engine
                 </span>
-                <span className="font-bold text-emerald-800 font-mono">Port 5433</span>
+                <span className="font-bold text-emerald-800 font-mono">
+                  {isDbFallback ? "SQLite (Fallback)" : "PostgreSQL (5433)"}
+                </span>
               </div>
               <div className="flex items-center justify-between text-slate-600">
                 <span className="flex items-center gap-1.5 font-medium">

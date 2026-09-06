@@ -171,6 +171,61 @@ async def process_task(task_id: UUID):
             with open(output_json_path, "w", encoding="utf-8") as f:
                 f.write(output_content)
 
+            # Ingest into Long-Term Memory Layer
+            try:
+                from app.memory import ingest_memory
+                doc_type_for_mem = extracted_fields.get("document_type", "inspection")
+                memory_entry = await ingest_memory(
+                    task_id=task.id,
+                    structured_output=extracted_fields,
+                    doc_type=doc_type_for_mem
+                )
+                step_count += 1
+                await log_step(
+                    db=db,
+                    task_id=task.id,
+                    step_number=step_count,
+                    description=f"Ingested structured entity memory for {memory_entry.entity_key} (Status: {'Current' if memory_entry.superseded_by is None else 'Superseded'})",
+                    tool_called="memory_ingest",
+                    tool_result={
+                        "memory_id": str(memory_entry.id),
+                        "entity_key": memory_entry.entity_key,
+                        "summary_text": memory_entry.summary_text,
+                        "is_current": memory_entry.superseded_by is None,
+                        "superseded_by": str(memory_entry.superseded_by) if memory_entry.superseded_by else None,
+                        "strength_score": memory_entry.strength_score
+                    }
+                )
+            except Exception as mem_err:
+                print(f"Warning: Memory ingestion error: {mem_err}")
+
+            # Ingest into Equipment Knowledge Graph
+            try:
+                from app.graph.ingest import record_equipment_event
+                eq_node = await record_equipment_event(
+                    task_id=task.id,
+                    structured_data=extracted_fields,
+                    event_type="inspection"
+                )
+                if eq_node:
+                    step_count += 1
+                    await log_step(
+                        db=db,
+                        task_id=task.id,
+                        step_number=step_count,
+                        description=f"Equipment Knowledge Graph: Recorded inspection event for {eq_node.equipment_id} ({eq_node.equipment_type.capitalize()} in Unit {eq_node.unit})",
+                        tool_called="equipment_graph_event",
+                        tool_result={
+                            "equipment_node_id": str(eq_node.id),
+                            "equipment_id": eq_node.equipment_id,
+                            "equipment_type": eq_node.equipment_type,
+                            "unit": eq_node.unit,
+                            "event_type": "inspection"
+                        }
+                    )
+            except Exception as graph_err:
+                print(f"Warning: Equipment graph ingestion error: {graph_err}")
+
             task.output_ref = output_content
             task.status = TaskStatus.done
             task.updated_at = datetime.utcnow()

@@ -7,6 +7,9 @@ import {
   Inbox,
   Link2,
   RefreshCw,
+  ShieldAlert,
+  CheckCircle2,
+  Clock,
 } from "lucide-react";
 import { fetchTasks } from "../api";
 import { TaskStatusBadge } from "../components/TaskStatusBadge";
@@ -18,6 +21,7 @@ export default function TaskListView() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const loadData = async () => {
     try {
@@ -41,6 +45,20 @@ export default function TaskListView() {
     setIsRefreshing(true);
     loadData();
   };
+
+  const pendingApprovalCount = tasks.filter((t) => t.status === "pending_approval").length;
+  const runningCount = tasks.filter((t) => t.status === "running" || t.status === "pending").length;
+  const doneCount = tasks.filter((t) => t.status === "done").length;
+  const failedOrRejectedCount = tasks.filter((t) => t.status === "failed" || t.status === "rejected").length;
+
+  const filteredTasks = tasks.filter((t) => {
+    if (statusFilter === "all") return true;
+    if (statusFilter === "pending_approval") return t.status === "pending_approval";
+    if (statusFilter === "done") return t.status === "done";
+    if (statusFilter === "running") return t.status === "running" || t.status === "pending";
+    if (statusFilter === "failed_rejected") return t.status === "failed" || t.status === "rejected";
+    return true;
+  });
 
   return (
     <div className="max-w-6xl mx-auto py-8 px-6 md:px-8">
@@ -80,6 +98,84 @@ export default function TaskListView() {
         </div>
       </div>
 
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 text-xs font-mono">
+        <button
+          onClick={() => setStatusFilter("all")}
+          className={`px-3 py-1.5 rounded-xl transition-all font-semibold flex items-center gap-1.5 cursor-pointer border ${
+            statusFilter === "all"
+              ? "bg-slate-900 text-white border-slate-900"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <span>All Tasks</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${statusFilter === "all" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-600"}`}>
+            {tasks.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("pending_approval")}
+          className={`px-3 py-1.5 rounded-xl transition-all font-semibold flex items-center gap-1.5 cursor-pointer border ${
+            statusFilter === "pending_approval"
+              ? "bg-amber-500 text-slate-900 border-amber-600 font-bold"
+              : "bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100"
+          }`}
+        >
+          <ShieldAlert className="h-3.5 w-3.5 text-amber-700" />
+          <span>Awaiting Approval</span>
+          {pendingApprovalCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-600 text-white font-bold animate-pulse">
+              {pendingApprovalCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("done")}
+          className={`px-3 py-1.5 rounded-xl transition-all font-semibold flex items-center gap-1.5 cursor-pointer border ${
+            statusFilter === "done"
+              ? "bg-emerald-700 text-white border-emerald-700"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+          <span>Completed</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${statusFilter === "done" ? "bg-emerald-800 text-white" : "bg-slate-100 text-slate-600"}`}>
+            {doneCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("running")}
+          className={`px-3 py-1.5 rounded-xl transition-all font-semibold flex items-center gap-1.5 cursor-pointer border ${
+            statusFilter === "running"
+              ? "bg-sky-600 text-white border-sky-600"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <Clock className="h-3.5 w-3.5 text-sky-600" />
+          <span>Running / Pending</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${statusFilter === "running" ? "bg-sky-700 text-white" : "bg-slate-100 text-slate-600"}`}>
+            {runningCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("failed_rejected")}
+          className={`px-3 py-1.5 rounded-xl transition-all font-semibold flex items-center gap-1.5 cursor-pointer border ${
+            statusFilter === "failed_rejected"
+              ? "bg-rose-700 text-white border-rose-700"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <span>Failed / Rejected</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${statusFilter === "failed_rejected" ? "bg-rose-800 text-white" : "bg-slate-100 text-slate-600"}`}>
+            {failedOrRejectedCount}
+          </span>
+        </button>
+      </div>
+
       {/* Table Container */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
         <table className="w-full text-left border-collapse">
@@ -89,6 +185,7 @@ export default function TaskListView() {
               <th className="px-6 py-3.5 font-bold">Agent Mode</th>
               <th className="px-6 py-3.5 font-bold">Goal / Input Reference</th>
               <th className="px-6 py-3.5 font-bold">Status</th>
+              <th className="px-6 py-3.5 font-bold">Confidence</th>
               <th className="px-6 py-3.5 font-bold">Timestamp</th>
               <th className="px-6 py-3.5 text-right font-bold">Action</th>
             </tr>
@@ -96,23 +193,23 @@ export default function TaskListView() {
           <tbody className="divide-y divide-slate-100">
             {loading && tasks.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-16 text-center text-slate-500 font-mono text-xs">
+                <td colSpan={7} className="px-6 py-16 text-center text-slate-500 font-mono text-xs">
                   <div className="flex flex-col items-center justify-center gap-3">
                     <RefreshCw className="h-6 w-6 text-emerald-700 animate-spin" />
                     <span>Loading MRPL agent queue...</span>
                   </div>
                 </td>
               </tr>
-            ) : tasks.length === 0 ? (
+            ) : filteredTasks.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-16 text-center text-slate-500 font-sans">
+                <td colSpan={7} className="px-6 py-16 text-center text-slate-500 font-sans">
                   <div className="max-w-md mx-auto flex flex-col items-center justify-center text-center">
                     <div className="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3 border border-slate-200">
                       <Inbox className="h-6 w-6" />
                     </div>
-                    <h3 className="text-sm font-semibold text-slate-800 mb-1">No tasks in queue</h3>
+                    <h3 className="text-sm font-semibold text-slate-800 mb-1">No tasks in this view</h3>
                     <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                      Upload an industrial document or enter a maintenance prompt to watch the sovereign agent plan, retrieve SOPs, and generate reports.
+                      No matching tasks found for the selected filter.
                     </p>
                     <Link
                       to="/upload"
@@ -124,11 +221,15 @@ export default function TaskListView() {
                 </td>
               </tr>
             ) : (
-              tasks.map((task) => (
+              filteredTasks.map((task) => (
                 <tr
                   key={task.id}
                   onClick={() => navigate(`/task/${task.id}`)}
-                  className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                  className={`transition-colors cursor-pointer group ${
+                    task.status === "pending_approval"
+                      ? "bg-amber-50/40 hover:bg-amber-50/80"
+                      : "hover:bg-slate-50"
+                  }`}
                 >
                   {/* Task ID */}
                   <td className="px-6 py-4 font-mono text-xs text-slate-600">
@@ -158,6 +259,25 @@ export default function TaskListView() {
                   {/* Status Badge */}
                   <td className="px-6 py-4">
                     <TaskStatusBadge status={task.status} size="sm" />
+                  </td>
+
+                  {/* Confidence Score */}
+                  <td className="px-6 py-4">
+                    {task.confidence_score !== null && task.confidence_score !== undefined ? (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-bold border ${
+                          task.confidence_score >= 80
+                            ? "bg-emerald-50 text-emerald-900 border-emerald-300"
+                            : task.confidence_score >= 50
+                            ? "bg-amber-50 text-amber-900 border-amber-300"
+                            : "bg-rose-50 text-rose-900 border-rose-300"
+                        }`}
+                      >
+                        <span>{task.confidence_score}%</span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 font-mono text-xs">—</span>
+                    )}
                   </td>
 
                   {/* Timestamp */}

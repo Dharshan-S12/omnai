@@ -143,6 +143,20 @@ export default function TaskDetailView() {
               </h2>
               <TaskTypeBadge type={task.task_type} />
               <TaskStatusBadge status={task.status} />
+              {task.confidence_score !== null && task.confidence_score !== undefined && (
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold border ${
+                  task.confidence_score >= 80 
+                    ? "bg-emerald-50 text-emerald-900 border-emerald-300"
+                    : task.confidence_score >= 50
+                    ? "bg-amber-50 text-amber-900 border-amber-300"
+                    : "bg-rose-50 text-rose-900 border-rose-300"
+                }`}>
+                  <span className={`h-2 w-2 rounded-full ${
+                    task.confidence_score >= 80 ? "bg-emerald-500" : task.confidence_score >= 50 ? "bg-amber-500" : "bg-rose-500"
+                  }`} />
+                  <span>Confidence: {task.confidence_score}%</span>
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-4 text-xs text-slate-500 font-mono flex-wrap">
@@ -189,11 +203,59 @@ export default function TaskDetailView() {
         </div>
       </div>
 
+      {/* Semantic Cache Hit Banner */}
+      {(() => {
+        const cacheHitStep = task.steps?.find((s) => s.tool_called === "semantic_cache_hit");
+        if (!cacheHitStep) return null;
+        const sim = cacheHitStep.tool_result?.similarity
+          ? Math.round(cacheHitStep.tool_result.similarity * 100)
+          : 95;
+        const matchedId = cacheHitStep.tool_result?.matched_task_id;
+        return (
+          <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-3.5 mb-6 shadow-xs flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <span className="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg">
+                <RefreshCw className="h-4 w-4 text-emerald-700" />
+              </span>
+              <div>
+                <p className="text-xs font-bold text-emerald-900 font-mono">
+                  ⚡ Served from Semantic Response Cache ({sim}% match to prior analysis)
+                </p>
+                <p className="text-[11px] text-emerald-700">
+                  Instant response served from sovereign vector cache. Fresh supervisor sign-off is still enforced below.
+                </p>
+              </div>
+            </div>
+            {matchedId && (
+              <Link
+                to={`/task/${matchedId}`}
+                className="text-xs font-mono font-bold text-emerald-800 hover:text-emerald-950 underline inline-flex items-center gap-1"
+              >
+                <span>Origin Task #{matchedId.slice(0, 8)}</span>
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Centerpiece: Step Timeline */}
       <StepTimeline steps={task.steps || []} isRunning={isRunning} />
 
       {/* Final Output Panel */}
-      <TaskOutputView task={task} />
+      <TaskOutputView
+        task={task}
+        onTaskUpdated={async () => {
+          if (id) {
+            try {
+              const updated = await fetchTaskDetails(id);
+              setTask(updated);
+            } catch (err) {
+              console.error("Error refreshing task details:", err);
+            }
+          }
+        }}
+      />
     </div>
   );
 }

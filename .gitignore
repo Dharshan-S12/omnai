@@ -23,6 +23,7 @@ wheels/
 # Virtual Environments
 .venv/
 venv/
+backend/venv/
 ENV/
 env/
 ENV*/
@@ -43,10 +44,19 @@ pgdata*/
 *.sqlite
 *.sqlite3
 *.db
+storage/*
+!storage/model_manifest.json
 backend/storage/*
 !backend/storage/samples/
 !backend/storage/samples/*
+!backend/storage/model_manifest.json
 !backend/storage/.gitkeep
+.vault_key
+storage/.vault_key
+
+# Large archives
+*.zip
+*.tar.gz
 
 # IDE / OS
 .vscode/

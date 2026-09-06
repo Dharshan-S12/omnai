@@ -16,19 +16,29 @@ class OllamaTimeoutError(RuntimeError):
 async def generate_text(
     prompt: str,
     system: Optional[str] = None,
-    model: str = "qwen2.5:7b-instruct",
-    timeout_seconds: float = 180.0
+    model: str = "qwen2.5:3b",
+    timeout_seconds: float = 180.0,
+    temperature: Optional[float] = None,
+    options: Optional[dict] = None
 ) -> str:
     """
     Generate text using local Ollama model.
     Strictly restricted to localhost:11434 with defensive connection & timeout error handling.
     """
+    req_options = {}
+    if options:
+        req_options.update(options)
+    if temperature is not None:
+        req_options["temperature"] = float(temperature)
+
     payload = {
         "model": model,
         "prompt": prompt,
         "stream": False,
-        "keep_alive": "30m"
+        "keep_alive": "10m"
     }
+    if req_options:
+        payload["options"] = req_options
     if system:
         payload["system"] = system
 
@@ -83,7 +93,7 @@ async def generate_vision(
         "images": [encoded_image],
         "options": {"num_ctx": 8192},
         "stream": False,
-        "keep_alive": "30m"
+        "keep_alive": "10m"
     }
 
     timeout = httpx.Timeout(timeout_seconds, connect=10.0)

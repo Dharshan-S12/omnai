@@ -2,7 +2,7 @@ import os
 import re
 import json
 import tempfile
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 import pypdf
 import pypdfium2
 
@@ -24,6 +24,45 @@ def is_pdf(file_path: str) -> bool:
             return header.startswith(b"%PDF-")
     except Exception:
         return False
+
+def evaluate_text_layer_quality(text: str) -> Tuple[float, str]:
+    """
+    Evaluates the quality, density, and legibility of an extracted PDF digital text layer.
+    Detects garbled character sequences, encoding corruption, and low word density.
+    Returns (quality_score: 0.0-1.0, quality_diagnostic: str).
+    """
+    if not text or not text.strip():
+        return 0.0, "Empty text layer"
+
+    clean_text = text.strip()
+    total_chars = len(clean_text)
+    if total_chars < 30:
+        return 0.2, f"Insufficient text volume ({total_chars} chars)"
+
+    # Count alphanumeric vs non-printable/garbled replacement characters
+    alphanumeric_chars = sum(1 for c in clean_text if c.isalnum() or c in " \n\t.,;:()[]-/%°")
+    garbled_chars = sum(1 for c in clean_text if c in "\x00\ufffd?\u0001\u0002\u0003")
+
+    alpha_ratio = alphanumeric_chars / total_chars
+    garbled_ratio = garbled_chars / total_chars
+
+    # Word count and average word length check
+    words = clean_text.split()
+    avg_word_len = sum(len(w) for w in words) / max(len(words), 1)
+
+    # Check for excessive garbled characters (e.g. broken embedded fonts)
+    if garbled_ratio > 0.15:
+        return 0.35, f"High garbled character density ({garbled_ratio:.1%})"
+
+    if alpha_ratio < 0.65:
+        return 0.45, f"Low alphanumeric readability ratio ({alpha_ratio:.1%})"
+
+    if len(words) < 8 or avg_word_len > 25:
+        return 0.50, f"Unusual word structure (words: {len(words)}, avg len: {avg_word_len:.1f})"
+
+    # High quality digital text layer
+    quality_score = min(1.0, max(0.0, alpha_ratio - (garbled_ratio * 2.0)))
+    return round(quality_score, 2), "High quality legible text layer"
 
 def _extract_text_layer(file_path: str, max_pages: int = MAX_PDF_PAGES):
     """
@@ -72,7 +111,6 @@ async def _classify_text_content(text_content: str, model: str = "qwen2.5:3b") -
                 return valid
         return "other"
     except Exception:
-        # Heuristic fallback
         lower = text_content.lower()
         if "inspection" in lower or "pump" in lower or "vibration" in lower:
             return "inspection_report"
@@ -156,35 +194,38 @@ async def process_pdf_document(
     text_model: str = "qwen2.5:3b"
 ) -> Dict[str, Any]:
     """
-    Process PDF documents transparently:
-    - Path A (text_extraction): Fast text-layer extraction via pypdf
-    - Path B (vision_ocr): Scanned page rendering via pypdfium2 + qwen2.5vl:7b OCR
-    Capped at max_pages (default 10) with truncation tracking.
+    Process PDF documents transparently with quality-gated digital fallback:
+    - Checks quality of digital text layer (word density, garbled character ratio).
+    - If quality >= 0.70 -> PATH A (text_extraction).
+    - If quality < 0.70 (garbled, corrupt, or scanned) -> PATH B (vision_ocr via pypdfium2 + qwen2.5vl:7b).
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"PDF document not found at {file_path}")
 
-    # 1. Attempt Text Layer Extraction (Path A)
+    # 1. Attempt Text Layer Extraction & Quality Verification
     page_texts, total_pages, is_truncated = _extract_text_layer(file_path, max_pages=max_pages)
     combined_text = "\n\n".join(
         f"--- Page {i+1} ---\n{t}" for i, t in enumerate(page_texts) if t
     ).strip()
 
     total_text_length = sum(len(t) for t in page_texts)
+    quality_score, quality_reason = evaluate_text_layer_quality(combined_text)
 
-    if total_text_length >= 50:
-        # PATH A: Text Layer Extraction (Native digital PDF)
+    # PATH A: Digital Text Layer (Quality must be >= 0.70)
+    if total_text_length >= 50 and quality_score >= 0.70:
         doc_type = await _classify_text_content(combined_text, model=text_model)
         structured_data = await _extract_structured_from_text(combined_text, doc_type=doc_type, model=text_model)
 
         structured_data["processing_path"] = "text_extraction"
+        structured_data["text_layer_quality"] = quality_score
+        structured_data["text_quality_diagnostic"] = quality_reason
         structured_data["page_count"] = len(page_texts)
         structured_data["total_pages"] = total_pages
         structured_data["truncated"] = is_truncated
         structured_data["raw_text"] = combined_text
         return structured_data
 
-    # 2. Scanned PDF: Render Pages to Images via pypdfium2 (Path B)
+    # PATH B: Scanned PDF or Low-Quality Digital Text -> Render to PNG via pypdfium2 and OCR
     with tempfile.TemporaryDirectory() as temp_dir:
         pdf = pypdfium2.PdfDocument(file_path)
         total_pages = len(pdf)
@@ -194,7 +235,7 @@ async def process_pdf_document(
         rendered_image_paths: List[str] = []
         for i in range(pages_to_process):
             page = pdf[i]
-            # Render at 2x scale (~144 DPI) for OCR clarity
+            # Render at 2x scale (~144 DPI) for high OCR clarity
             image = page.render(scale=2.0).to_pil()
             img_path = os.path.join(temp_dir, f"rendered_page_{i+1}.png")
             image.save(img_path, format="PNG")
@@ -214,7 +255,6 @@ async def process_pdf_document(
         # Classify using first page
         doc_type = await classify_document_type(rendered_image_paths[0], model=vision_model)
 
-        # Extract structured fields for each page
         all_page_results: List[Dict[str, Any]] = []
         all_raw_texts: List[str] = []
 
@@ -226,10 +266,13 @@ async def process_pdf_document(
             elif res.get("findings"):
                 all_raw_texts.append(f"--- Page {idx+1} ---\n{res['findings']}")
 
-        # Merge page outputs
         primary_result = all_page_results[0].copy()
         primary_result["document_type"] = doc_type
         primary_result["processing_path"] = "vision_ocr"
+        primary_result["fallback_trigger_reason"] = (
+            f"Digital text layer quality low ({quality_score:.2f} < 0.70: {quality_reason})"
+            if total_text_length >= 50 else "Scanned/Image-only PDF (No digital text layer)"
+        )
         primary_result["page_count"] = pages_to_process
         primary_result["total_pages"] = total_pages
         primary_result["truncated"] = is_truncated

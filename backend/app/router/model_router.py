@@ -40,11 +40,11 @@ CAPABILITY_PRIORITY_TIERS: Dict[ModelCategory, List[str]] = {
         "qwen2.5:latest"
     ],
     ModelCategory.CODING: [
-        "qwen2.5-coder:7b",
+        "qwen2.5:3b",
         "qwen2.5-coder:3b",
+        "qwen2.5-coder:7b",
         "qwen2.5-coder:1.5b",
-        "qwen2.5:7b-instruct",
-        "qwen2.5:3b"
+        "qwen2.5:7b-instruct"
     ],
     ModelCategory.REASONING: [
         "qwen2.5:3b",
@@ -53,8 +53,8 @@ CAPABILITY_PRIORITY_TIERS: Dict[ModelCategory, List[str]] = {
         "deepseek-r1:7b"
     ],
     ModelCategory.GENERAL: [
-        "qwen2.5:7b-instruct",
         "qwen2.5:3b",
+        "qwen2.5:7b-instruct",
         "llama3.1:8b",
         "mistral:7b",
         "qwen2.5:latest"
@@ -209,3 +209,73 @@ async def route_model(
         is_fallback=is_fallback,
         available_candidates=installed_models
     )
+
+UNCERTAINTY_PATTERNS = [
+    r"\bi am not sure\b",
+    r"\bi'm not sure\b",
+    r"\bit is unclear\b",
+    r"\bit's unclear\b",
+    r"\binsufficient information\b",
+    r"\bcannot determine\b",
+    r"\bnot enough data\b",
+    r"\buncertain\b"
+]
+
+async def generate_with_escalation(
+    prompt: str,
+    system: str = "",
+    min_length: int = 80,
+    fast_model: str = "qwen2.5:3b",
+    primary_model: str = "qwen2.5:7b-instruct",
+    timeout_fast: float = 60.0,
+    timeout_primary: float = 180.0
+) -> tuple[str, Optional[Dict[str, Any]]]:
+    """
+    Confidence-Based Model Escalation:
+    1. Attempts generation with fast low-latency model (e.g. qwen2.5:3b).
+    2. Inspects response for brevity (< min_length) or hedging uncertainty.
+    3. If uncertain or too brief, automatically escalates to primary 7B model.
+    """
+    from app.models.ollama_client import generate_text
+
+    installed = await get_installed_models()
+    fast_target = next((m for m in installed if fast_model.lower() in m.lower()), None)
+    primary_target = next((m for m in installed if primary_model.lower() in m.lower()), primary_model)
+
+    if not fast_target or fast_target == primary_target:
+        output = await generate_text(prompt=prompt, system=system, model=primary_target, timeout_seconds=timeout_primary)
+        return output, None
+
+    # 1. Fast attempt
+    try:
+        fast_output = await generate_text(prompt=prompt, system=system, model=fast_target, timeout_seconds=timeout_fast)
+    except Exception:
+        fast_output = ""
+
+    # 2. Check heuristics
+    escalate_reason = None
+    if not fast_output or len(fast_output.strip()) < min_length:
+        escalate_reason = f"Response length ({len(fast_output.strip())} chars) below threshold of {min_length} chars"
+    else:
+        text_lower = fast_output.lower()
+        for pat in UNCERTAINTY_PATTERNS:
+            if re.search(pat, text_lower):
+                escalate_reason = f"Fast model expressed hedging/uncertainty matching '{pat}'"
+                break
+
+    if escalate_reason:
+        primary_output = await generate_text(prompt=prompt, system=system, model=primary_target, timeout_seconds=timeout_primary)
+        return primary_output, {
+            "escalated": True,
+            "fast_model": fast_target,
+            "primary_model": primary_target,
+            "reason": escalate_reason,
+            "fast_preview": fast_output[:120] if fast_output else "(empty)"
+        }
+
+    return fast_output, {
+        "escalated": False,
+        "fast_model": fast_target,
+        "primary_model": primary_target,
+        "reason": "Fast model response met quality threshold without uncertainty"
+    }
